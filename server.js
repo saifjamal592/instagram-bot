@@ -1,6 +1,6 @@
 // ============================================================
 //  Instagram Comment → Auto DM Bot
-//  Multiple keywords, each with its own custom message
+//  Uses Private Reply — works for everyone, no restrictions
 // ============================================================
 
 const express = require('express');
@@ -67,16 +67,16 @@ app.post('/webhook', async (req, res) => {
       if (change.field !== 'comments') continue;
 
       const commentText       = (change.value.text || '').toLowerCase().trim();
-      const commenterId       = change.value.from?.id;
+      const commentId         = change.value.id;  // Used for private reply
       const commenterUsername = change.value.from?.username || 'someone';
 
       console.log(`💬 New comment from @${commenterUsername}: "${commentText}"`);
 
       const matchedMessage = getMatchingMessage(commentText);
 
-      if (matchedMessage && commenterId) {
-        console.log(`🎯 Keyword matched! Sending DM to @${commenterUsername}...`);
-        await sendDM(commenterId, commenterUsername, matchedMessage);
+      if (matchedMessage && commentId) {
+        console.log(`🎯 Keyword matched! Sending private reply to @${commenterUsername}...`);
+        await sendPrivateReply(commentId, commenterUsername, matchedMessage);
       } else {
         console.log(`⏭️ No keyword matched — ignoring comment`);
       }
@@ -96,8 +96,9 @@ function getMatchingMessage(commentText) {
 }
 
 
-// ── Send the DM using Instagram Graph API ──────────────────
-async function sendDM(userId, username, message) {
+// ── Send Private Reply to the comment ──────────────────────
+// This bypasses the 24hr messaging window — works for everyone
+async function sendPrivateReply(commentId, username, message) {
   if (!IG_USER_ID) {
     console.error('❌ Instagram User ID not loaded yet');
     return;
@@ -107,18 +108,18 @@ async function sendDM(userId, username, message) {
     await axios.post(
       `https://graph.instagram.com/v19.0/${IG_USER_ID}/messages`,
       {
-        recipient: { id: userId },
+        recipient: { comment_id: commentId },  // Private reply to comment
         message:   { text: message }
       },
       {
         params: { access_token: ACCESS_TOKEN }
       }
     );
-    console.log(`✅ DM sent successfully to @${username}`);
+    console.log(`✅ Private reply sent successfully to @${username}`);
 
   } catch (error) {
     const errMsg = error.response?.data?.error?.message || error.message;
-    console.error(`❌ Failed to send DM to @${username}: ${errMsg}`);
+    console.error(`❌ Failed to send private reply to @${username}: ${errMsg}`);
   }
 }
 
