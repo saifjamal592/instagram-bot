@@ -1,6 +1,6 @@
 // ============================================================
 //  Instagram Comment → Auto DM Bot
-//  No coding knowledge needed — just fill in your .env file
+//  Multiple keywords, each with its own custom message
 // ============================================================
 
 const express = require('express');
@@ -9,16 +9,21 @@ const app     = express();
 
 app.use(express.json());
 
-// ── Load your settings from the .env file ──────────────────
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN;   // You make this up (any word)
-const ACCESS_TOKEN = process.env.ACCESS_TOKEN;   // From Meta App dashboard
-const KEYWORD      = process.env.KEYWORD;        // e.g. "LINK" or "INFO"
-const DM_MESSAGE   = process.env.DM_MESSAGE;     // The message + link to send
+// ── Your settings ───────────────────────────────────────────
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 
 
-// ── Step 1: Meta verifies your server is real ──────────────
-// Meta calls this once when you paste your webhook URL in the dashboard.
-// It checks your VERIFY_TOKEN and says "yes, this server belongs to you."
+// ── Keyword → Message Map ───────────────────────────────────
+// Add as many keywords and messages as you want here.
+// Just copy the format: "keyword": "message"
+const KEYWORD_MESSAGES = {
+  "bank9": "يسعدنا انضمامك الى بنك الاسئلة في 26 Academy   Username: questionbank  Password: 1234  https://26-academy.com/course/questionbank-free/",
+  "v9":    "Welcome to 26 Academy 🎓\nرابط الحفظيات: https://26-academy.com/wp-content/uploads/2026/05/Grade-11-Vocabulary.pdf",
+};
+
+
+// ── Step 1: Meta verifies your server ──────────────────────
 app.get('/webhook', (req, res) => {
   const mode      = req.query['hub.mode'];
   const token     = req.query['hub.verify_token'];
@@ -34,48 +39,58 @@ app.get('/webhook', (req, res) => {
 });
 
 
-// ── Step 2: Receive comment events from Instagram ──────────
-// Every time someone comments on your post, Instagram sends
-// the comment details here automatically.
+// ── Step 2: Receive comment events ─────────────────────────
 app.post('/webhook', async (req, res) => {
   const body = req.body;
 
-  // Always respond quickly so Meta knows we received it
   res.status(200).send('EVENT_RECEIVED');
 
-  // Only handle Instagram events
   if (body.object !== 'instagram') return;
 
   for (const entry of body.entry || []) {
     for (const change of entry.changes || []) {
 
-      // We only care about new comments
       if (change.field !== 'comments') continue;
 
-      const commentText  = (change.value.text || '').toLowerCase();
-      const commenterId  = change.value.from?.id;
+      const commentText       = (change.value.text || '').toLowerCase().trim();
+      const commenterId       = change.value.from?.id;
       const commenterUsername = change.value.from?.username || 'someone';
 
       console.log(`💬 New comment from @${commenterUsername}: "${commentText}"`);
 
-      // Check if the comment contains the trigger keyword
-      if (commentText.includes(KEYWORD.toLowerCase()) && commenterId) {
-        console.log(`🎯 Keyword "${KEYWORD}" detected! Sending DM...`);
-        await sendDM(commenterId, commenterUsername);
+      // Check comment against every keyword
+      const matchedMessage = getMatchingMessage(commentText);
+
+      if (matchedMessage && commenterId) {
+        console.log(`🎯 Keyword matched! Sending DM to @${commenterUsername}...`);
+        await sendDM(commenterId, commenterUsername, matchedMessage);
+      } else {
+        console.log(`⏭️ No keyword matched — ignoring comment`);
       }
     }
   }
 });
 
 
-// ── Step 3: Send the DM ────────────────────────────────────
-async function sendDM(userId, username) {
+// ── Find which keyword matches the comment ──────────────────
+function getMatchingMessage(commentText) {
+  for (const [keyword, message] of Object.entries(KEYWORD_MESSAGES)) {
+    if (commentText.includes(keyword.toLowerCase())) {
+      return message;
+    }
+  }
+  return null;
+}
+
+
+// ── Send the DM ─────────────────────────────────────────────
+async function sendDM(userId, username, message) {
   try {
     await axios.post(
       `https://graph.facebook.com/v19.0/me/messages`,
       {
         recipient: { id: userId },
-        message:   { text: DM_MESSAGE }
+        message:   { text: message }
       },
       {
         params: { access_token: ACCESS_TOKEN }
@@ -90,10 +105,9 @@ async function sendDM(userId, username) {
 }
 
 
-// ── Start the server ───────────────────────────────────────
+// ── Start the server ────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Bot is running on port ${PORT}`);
-  console.log(`📌 Keyword trigger: "${KEYWORD}"`);
-  console.log(`📨 DM message ready`);
+  console.log(`📌 Active keywords: ${Object.keys(KEYWORD_MESSAGES).join(', ')}`);
 });
