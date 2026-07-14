@@ -14,7 +14,6 @@ const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 
 // ── Keyword → Message Map ───────────────────────────────────
-// Each entry has a list of variations that all send the same message
 const KEYWORD_MESSAGES = [
   {
     keywords: ["bank9", "bank 9"],
@@ -22,7 +21,7 @@ const KEYWORD_MESSAGES = [
   },
   {
     keywords: ["v9", "v 9"],
-    message: "Welcome to 26 Academy 🎓\nرابط الحفظيات: https://26-academy.com/wp-content/uploads/2026/05/Grade-11-Vocabulary.pdf"
+    message: "Welcome to 26 Academy 🎓\nرابط الحفظيات: https://26-academy.com/wp-content/uploads/2026/06/Grade-11-Vocabulary.pdf"
   },
 ];
 
@@ -76,6 +75,17 @@ app.post('/webhook', async (req, res) => {
       const commentText       = (change.value.text || '').toLowerCase().trim();
       const commentId         = change.value.id;
       const commenterUsername = change.value.from?.username || 'someone';
+      const parentId          = change.value.parent_id; // exists if it's a reply
+
+      // Debug — shows us exactly what Instagram is sending
+      console.log('📦 Full comment data:', JSON.stringify(change.value, null, 2));
+
+      // ── Skip replies to other comments ─────────────────
+      // Instagram only allows private replies to top-level comments
+      if (parentId) {
+        console.log(`⏭️ Skipping reply comment from @${commenterUsername} — not a top-level comment`);
+        continue;
+      }
 
       console.log(`💬 New comment from @${commenterUsername}: "${commentText}"`);
 
